@@ -1,5 +1,4 @@
 import { Suspense, useEffect, useState } from 'react';
-import { useInterval, useUpdate } from 'react-use';
 import styled from 'styled-components';
 
 import { addUnitIfNeeded } from '../../../lib/css/addUnitIfNeeded';
@@ -28,39 +27,36 @@ function getScrollToLeft({
   let scrollToLeft = Number.MAX_SAFE_INTEGER;
 
   // 画面に表示されているページの中心と、スクロールビューの中心との差分を計算する
-  // 世界は我々の想像する以上に変化するため、2 ** 12 回繰り返し観測する
-  for (let times = 0; times < 2 ** 12; times++) {
-    for (const [idx, child] of children.entries()) {
-      const nthChild = idx + 1;
-      const elementClientRect = child.getBoundingClientRect();
+  for (const [idx, child] of children.entries()) {
+    const nthChild = idx + 1;
+    const elementClientRect = child.getBoundingClientRect();
 
-      // 見開き2ページの場合は、scroll-margin で表示領域にサイズを合わせる
-      const scrollMargin =
-        pageCountParView === 2
-          ? {
-              // 奇数ページのときは左側に1ページ分の幅を追加する
-              left: nthChild % 2 === 0 ? pageWidth : 0,
-              // 偶数ページのときは右側に1ページ分の幅を追加する
-              right: nthChild % 2 === 1 ? pageWidth : 0,
-            }
-          : { left: 0, right: 0 };
+    // 見開き2ページの場合は、scroll-margin で表示領域にサイズを合わせる
+    const scrollMargin =
+      pageCountParView === 2
+        ? {
+            // 奇数ページのときは左側に1ページ分の幅を追加する
+            left: nthChild % 2 === 0 ? pageWidth : 0,
+            // 偶数ページのときは右側に1ページ分の幅を追加する
+            right: nthChild % 2 === 1 ? pageWidth : 0,
+          }
+        : { left: 0, right: 0 };
 
-      // scroll-margin の分だけ広げた範囲を計算する
-      const areaClientRect = {
-        bottom: elementClientRect.bottom,
-        left: elementClientRect.left - scrollMargin.left,
-        right: elementClientRect.right + scrollMargin.right,
-        top: elementClientRect.top,
-      };
+    // scroll-margin の分だけ広げた範囲を計算する
+    const areaClientRect = {
+      bottom: elementClientRect.bottom,
+      left: elementClientRect.left - scrollMargin.left,
+      right: elementClientRect.right + scrollMargin.right,
+      top: elementClientRect.top,
+    };
 
-      const areaCenterX = (areaClientRect.left + areaClientRect.right) / 2;
-      // ページの中心をスクロールビューの中心に合わせるための移動距離
-      const candidateScrollToLeft = areaCenterX - scrollViewCenterX;
+    const areaCenterX = (areaClientRect.left + areaClientRect.right) / 2;
+    // ページの中心をスクロールビューの中心に合わせるための移動距離
+    const candidateScrollToLeft = areaCenterX - scrollViewCenterX;
 
-      // もっともスクロール量の少ないものを選ぶ
-      if (Math.abs(candidateScrollToLeft) < Math.abs(scrollToLeft)) {
-        scrollToLeft = candidateScrollToLeft;
-      }
+    // もっともスクロール量の少ないものを選ぶ
+    if (Math.abs(candidateScrollToLeft) < Math.abs(scrollToLeft)) {
+      scrollToLeft = candidateScrollToLeft;
     }
   }
 
@@ -99,10 +95,6 @@ type Props = {
 };
 
 const ComicViewerCore: React.FC<Props> = ({ episodeId }) => {
-  // 画面のリサイズに合わせて再描画する
-  const rerender = useUpdate();
-  useInterval(rerender, 0);
-
   const { data: episode } = useEpisode({ params: { episodeId } });
 
   const [container, containerRef] = useState<HTMLDivElement | null>(null);
