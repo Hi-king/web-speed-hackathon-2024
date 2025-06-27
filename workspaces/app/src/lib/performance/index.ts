@@ -6,3 +6,4 @@ export {
   useStatePerformance 
 } from './hooks';
 export { webVitalsLogger } from './webVitals';
+export { layoutShiftAnalyzer } from './layoutShift';
