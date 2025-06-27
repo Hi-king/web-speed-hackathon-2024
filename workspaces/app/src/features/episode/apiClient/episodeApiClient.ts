@@ -7,6 +7,7 @@ import type { GetEpisodeResponse } from '@wsh-2024/schema/src/api/episodes/GetEp
 
 import type { DomainSpecificApiClientInterface } from '../../../lib/api/DomainSpecificApiClientInterface';
 import { apiClient } from '../../../lib/api/apiClient';
+import { performanceLogger } from '../../../lib/performance';
 
 type EpisodeApiClient = DomainSpecificApiClientInterface<{
   fetch: [{ params: GetEpisodeRequestParams }, GetEpisodeResponse];
@@ -15,18 +16,30 @@ type EpisodeApiClient = DomainSpecificApiClientInterface<{
 
 export const episodeApiClient: EpisodeApiClient = {
   fetch: async ({ params }) => {
-    const response = await apiClient.get<GetEpisodeResponse>(inject('/api/v1/episodes/:episodeId', params));
-    return response.data;
+    return performanceLogger.measureAsync(
+      `API-episode-fetch-${params.episodeId}`,
+      async () => {
+        const response = await apiClient.get<GetEpisodeResponse>(inject('/api/v1/episodes/:episodeId', params));
+        return response.data;
+      },
+      { episodeId: params.episodeId }
+    );
   },
   fetch$$key: (options) => ({
     requestUrl: `/api/v1/episodes/:episodeId`,
     ...options,
   }),
   fetchList: async ({ query }) => {
-    const response = await apiClient.get<GetEpisodeListResponse>(inject('/api/v1/episodes', {}), {
-      params: query,
-    });
-    return response.data;
+    return performanceLogger.measureAsync(
+      'API-episode-fetchList',
+      async () => {
+        const response = await apiClient.get<GetEpisodeListResponse>(inject('/api/v1/episodes', {}), {
+          params: query,
+        });
+        return response.data;
+      },
+      { query }
+    );
   },
   fetchList$$key: (options) => ({
     requestUrl: `/api/v1/episodes`,

@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState } from 'react';
 import styled from 'styled-components';
 
 import { addUnitIfNeeded } from '../../../lib/css/addUnitIfNeeded';
+import { performanceLogger, useRenderPerformance } from '../../../lib/performance';
 import { useEpisode } from '../../episode/hooks/useEpisode';
 
 import { ComicViewerPage } from './ComicViewerPage';
@@ -19,6 +20,8 @@ function getScrollToLeft({
   pageWidth: number;
   scrollView: HTMLDivElement;
 }) {
+  performanceLogger.start('getScrollToLeft');
+  
   const scrollViewClientRect = scrollView.getBoundingClientRect();
   const scrollViewCenterX = (scrollViewClientRect.left + scrollViewClientRect.right) / 2;
 
@@ -60,6 +63,12 @@ function getScrollToLeft({
     }
   }
 
+  performanceLogger.end('getScrollToLeft', { 
+    pageCountParView, 
+    childrenCount: children.length,
+    scrollToLeft 
+  });
+  
   return scrollToLeft;
 }
 
@@ -95,25 +104,36 @@ type Props = {
 };
 
 const ComicViewerCore: React.FC<Props> = ({ episodeId }) => {
+  useRenderPerformance('ComicViewerCore', [episodeId]);
+  
   const { data: episode } = useEpisode({ params: { episodeId } });
 
   const [container, containerRef] = useState<HTMLDivElement | null>(null);
   const [scrollView, scrollViewRef] = useState<HTMLDivElement | null>(null);
 
   // コンテナの幅
-  const cqw = (container?.getBoundingClientRect().width ?? 0) / 100;
+  const cqw = performanceLogger.measure('calculate-cqw', () => 
+    (container?.getBoundingClientRect().width ?? 0) / 100
+  );
   // コンテナの高さ
-  const cqh = (container?.getBoundingClientRect().height ?? 0) / 100;
+  const cqh = performanceLogger.measure('calculate-cqh', () => 
+    (container?.getBoundingClientRect().height ?? 0) / 100
+  );
 
   // 1画面に表示できるページ数（1 or 2）
-  const pageCountParView = (100 * cqw) / (100 * cqh) < (2 * IMAGE_WIDTH) / IMAGE_HEIGHT ? 1 : 2;
+  const pageCountParView = performanceLogger.measure('calculate-pageCountParView', () => 
+    (100 * cqw) / (100 * cqh) < (2 * IMAGE_WIDTH) / IMAGE_HEIGHT ? 1 : 2
+  );
   // ページの幅
-  const pageWidth = ((100 * cqh) / IMAGE_HEIGHT) * IMAGE_WIDTH;
+  const pageWidth = performanceLogger.measure('calculate-pageWidth', () => 
+    ((100 * cqh) / IMAGE_HEIGHT) * IMAGE_WIDTH
+  );
   // 画面にページを表示したときに余る左右の余白
-  const viewerPaddingInline =
+  const viewerPaddingInline = performanceLogger.measure('calculate-viewerPaddingInline', () =>
     (100 * cqw - pageWidth * pageCountParView) / 2 +
     // 2ページ表示のときは、奇数ページが左側にあるべきなので、ページの最初と最後に1ページの余白をいれる
-    (pageCountParView === 2 ? pageWidth : 0);
+    (pageCountParView === 2 ? pageWidth : 0)
+  );
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -122,57 +142,69 @@ const ComicViewerCore: React.FC<Props> = ({ episodeId }) => {
     let scrollToLeftWhenScrollEnd = 0;
 
     const handlePointerDown = (ev: PointerEvent) => {
+      performanceLogger.start('handlePointerDown');
       const scrollView = ev.currentTarget as HTMLDivElement;
       isPressed = true;
       scrollView.style.cursor = 'grabbing';
       scrollView.setPointerCapture(ev.pointerId);
       scrollToLeftWhenScrollEnd = getScrollToLeft({ pageCountParView, pageWidth, scrollView });
+      performanceLogger.end('handlePointerDown');
     };
 
     const handlePointerMove = (ev: PointerEvent) => {
       if (isPressed) {
+        performanceLogger.start('handlePointerMove');
         const scrollView = ev.currentTarget as HTMLDivElement;
         scrollView.scrollBy({
           behavior: 'instant',
           left: -1 * ev.movementX,
         });
         scrollToLeftWhenScrollEnd = getScrollToLeft({ pageCountParView, pageWidth, scrollView });
+        performanceLogger.end('handlePointerMove');
       }
     };
 
     const handlePointerUp = (ev: PointerEvent) => {
+      performanceLogger.start('handlePointerUp');
       const scrollView = ev.currentTarget as HTMLDivElement;
       isPressed = false;
       scrollView.style.cursor = 'grab';
       scrollView.releasePointerCapture(ev.pointerId);
       scrollToLeftWhenScrollEnd = getScrollToLeft({ pageCountParView, pageWidth, scrollView });
+      performanceLogger.end('handlePointerUp');
     };
 
     const handleScroll = (ev: Pick<Event, 'currentTarget'>) => {
+      performanceLogger.start('handleScroll');
       const scrollView = ev.currentTarget as HTMLDivElement;
       scrollToLeftWhenScrollEnd = getScrollToLeft({ pageCountParView, pageWidth, scrollView });
+      performanceLogger.end('handleScroll');
     };
 
     let scrollEndTimer = -1;
     abortController.signal.addEventListener('abort', () => window.clearTimeout(scrollEndTimer), { once: true });
 
     const handleScrollEnd = (ev: Pick<Event, 'currentTarget'>) => {
+      performanceLogger.start('handleScrollEnd');
       const scrollView = ev.currentTarget as HTMLDivElement;
 
       // マウスが離されるまではスクロール中とみなす
       if (isPressed) {
         scrollEndTimer = window.setTimeout(() => handleScrollEnd({ currentTarget: scrollView }), 0);
+        performanceLogger.end('handleScrollEnd', { status: 'deferred' });
         return;
       } else {
         scrollView.scrollBy({
           behavior: 'smooth',
           left: scrollToLeftWhenScrollEnd,
         });
+        performanceLogger.end('handleScrollEnd', { status: 'completed' });
       }
     };
 
     let prevContentRect: DOMRectReadOnly | null = null;
     const handleResize = (entries: ResizeObserverEntry[]) => {
+      performanceLogger.start('handleResize');
       if (prevContentRect != null && prevContentRect.width !== entries[0]?.contentRect.width) {
         requestAnimationFrame(() => {
           scrollView?.scrollBy({
@@ -182,6 +214,9 @@ const ComicViewerCore: React.FC<Props> = ({ episodeId }) => {
         });
       }
       prevContentRect = entries[0]?.contentRect ?? null;
+      performanceLogger.end('handleResize', { 
+        widthChanged: prevContentRect?.width !== entries[0]?.contentRect.width 
+      });
     };
 
     scrollView?.addEventListener('pointerdown', handlePointerDown, { passive: false, signal: abortController.signal });
